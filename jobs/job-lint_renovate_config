@@ -1,0 +1,81 @@
+---
+lint_renovate_config:
+  image: renovate/renovate:latest
+  stage: validate
+  tags:
+    - non-prod-workload
+  rules:
+    - if: $LRC_JOB_DISABLED =~ /true/i
+      when: never
+    - if: $LRC_CUSTOM_CONFIG_LIST != "" && $LRC_CUSTOM_CONFIG_LIST != null
+      when: on_success
+    - exists:
+        -  "**/renovate.json"
+      when: on_success
+    # don't run outside of push or mr events
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "trigger"'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "parent_pipeline"'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "pipeline"'
+      when: never
+    # don't run on branch if there is an MR open for the branch
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS && $CI_PIPELINE_SOURCE == "push"
+      when: never
+    # don't run on branches created by renovate, renovate immediately creates MRs anyway
+    - if: $CI_COMMIT_BRANCH =~ /^renovate.*$/ && $CI_PIPELINE_SOURCE == "push"
+      when: never
+    - when: never
+  allow_failure:
+    exit_codes:
+      - 65
+  script:
+    # Check variable $LRC_STRICT_MODE
+    - |
+      if [[ -z "$LRC_STRICT_MODE" ]]; then
+        echo "Variable LRC_STRICT_MODE is not set."
+        LRC_STRICT_MODE=0
+        echo "Set Variable LRC_STRICT_MODE: $LRC_STRICT_MODE"
+      fi
+
+    # Prepare files to validate
+    - |
+      echo "Run renovate config validator..."
+      # default config file to validate
+      files_to_validate="renovate.json"
+
+      # if custom renovate config files are provided, validate these files only
+      if [ -n "$LRC_CUSTOM_CONFIG_LIST" ]; then
+        files_to_validate="${LRC_CUSTOM_CONFIG_LIST}"
+      fi
+
+      validator_log_file="$(pwd)/renovate_validator_log.txt"
+      # make sure the validator log file empty
+      : > "$validator_log_file"
+
+    # Run renovate-config-validator
+    - |
+      for config_file in $files_to_validate; do
+        if [[ -f "$config_file" ]]; then
+          if [[ "$LRC_STRICT_MODE" -eq 2 ]]; then
+            renovate-config-validator --strict "$config_file"
+          elif [[ "$LRC_STRICT_MODE" -eq 1 ]]; then
+            renovate-config-validator "$config_file"
+          elif [[ "$LRC_STRICT_MODE" -eq 0 ]]; then
+            ( renovate-config-validator "$config_file" || true ) | tee -a "$validator_log_file"
+          else
+            echo "Invalid value for LRC_STRICT_MODE: $LRC_STRICT_MODE"
+            echo "Please set Variable LRC_STRICT_MODE with value of 0 or 1 or 2"
+            exit 1
+          fi
+        fi
+      done
+
+      # return custom exit code 65 for "allow_failure" (see https://tldp.org/LDP/abs/html/exitcodes.html)
+      if grep -qE "WARN|ERROR" "$validator_log_file"; then
+        exit 65
+      fi
