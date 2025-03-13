@@ -1,6 +1,6 @@
 ---
 lint_renovate_config:
-  image: renovate/renovate:latest
+  image: ghcr.io/kranjuli/docker-renovate/renovate-slim:latest
   stage: validate
   tags:
     - non-prod-workload
