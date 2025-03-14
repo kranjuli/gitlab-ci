@@ -42,6 +42,14 @@ lint_renovate_config:
         echo "Set Variable LRC_STRICT_MODE: $LRC_STRICT_MODE"
       fi
 
+      echo "Current LRC_STRICT_MODE value: $LRC_STRICT_MODE"
+
+      if [[ "$LRC_STRICT_MODE" != "0" && "$LRC_STRICT_MODE" != "1" && "$LRC_STRICT_MODE" != "2" ]]; then
+        echo "Invalid value for LRC_STRICT_MODE: $LRC_STRICT_MODE"
+        echo "Please set Variable LRC_STRICT_MODE with value of 0 or 1 or 2"
+        exit 1
+      fi
+
     # Prepare files to validate
     - |
       echo "Run renovate config validator..."
@@ -61,21 +69,25 @@ lint_renovate_config:
     - |
       for config_file in $files_to_validate; do
         if [[ -f "$config_file" ]]; then
-          if [[ "$LRC_STRICT_MODE" -eq 2 ]]; then
-            renovate-config-validator --strict "$config_file"
-          elif [[ "$LRC_STRICT_MODE" -eq 1 ]]; then
-            renovate-config-validator "$config_file"
-          elif [[ "$LRC_STRICT_MODE" -eq 0 ]]; then
-            ( renovate-config-validator "$config_file" || true ) | tee -a "$validator_log_file"
-          else
-            echo "Invalid value for LRC_STRICT_MODE: $LRC_STRICT_MODE"
-            echo "Please set Variable LRC_STRICT_MODE with value of 0 or 1 or 2"
-            exit 1
-          fi
+          ( renovate-config-validator "$config_file" || true ) | tee -a "$validator_log_file"
+        else
+          echo "File ${config_file} not found"
         fi
       done
 
+      if [[ "$LRC_STRICT_MODE" -eq 2 ]] && grep -qE "WARN|ERROR" "$validator_log_file"; then
+        echo "Warnings or errors found in the config files."
+        exit 1
+      fi
+
+      if [[ "$LRC_STRICT_MODE" -eq 1 ]] && grep -qE "ERROR" "$validator_log_file"; then
+        echo "Errors found in the config files."
+        exit 1
+      fi
+
       # return custom exit code 65 for "allow_failure" (see https://tldp.org/LDP/abs/html/exitcodes.html)
-      if grep -qE "WARN|ERROR" "$validator_log_file"; then
+      if [[ "$LRC_STRICT_MODE" -eq 0 ]] && grep -qE "WARN|ERROR" "$validator_log_file"; then
+        echo "Job returned custom exit code 65. This indicates that warnings or errors have been found."
+        echo "Because of LRC_STRICT_MODE=0 the job is allowed to fail when encountering this error code."
         exit 65
       fi
