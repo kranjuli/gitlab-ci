@@ -5,13 +5,6 @@ lint_renovate_config:
   tags:
     - non-prod-workload
   rules:
-    - if: $LRC_JOB_DISABLED =~ /true/i
-      when: never
-    - if: $LRC_CUSTOM_CONFIG_LIST != "" && $LRC_CUSTOM_CONFIG_LIST != null
-      when: on_success
-    - exists:
-        -  "**/renovate.json"
-      when: on_success
     # don't run outside of push or mr events
     - if: '$CI_PIPELINE_SOURCE == "web"'
       when: never
@@ -29,6 +22,16 @@ lint_renovate_config:
     # don't run on branches created by renovate, renovate immediately creates MRs anyway
     - if: $CI_COMMIT_BRANCH =~ /^renovate.*$/ && $CI_PIPELINE_SOURCE == "push"
       when: never
+    # don't run if job is explicitely disabled
+    - if: $LRC_JOB_DISABLED =~ /true/i
+      when: never
+    # run if specific configuration was passed
+    - if: $LRC_CUSTOM_CONFIG_LIST != "" && $LRC_CUSTOM_CONFIG_LIST != null
+      when: on_success
+    # run if adefault configuration file exists
+    - exists:
+        -  "**/renovate.json"
+      when: on_success
     - when: never
   allow_failure:
     exit_codes:
