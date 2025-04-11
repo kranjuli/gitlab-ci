@@ -1,0 +1,36 @@
+---
+validate_input_variables:
+  image: alpine:3.21.3
+  stage: validate
+  tags:
+    - non-prod-workload
+  rules:
+    - if: $VIV_JOB_DISABLED =~ /true/i
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+      when: always
+    - if: '$CI_PIPELINE_SOURCE == "pipeline"'
+      when: always
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: always
+    - when: never
+  allow_failure: false
+  script:
+    - |
+      IFS=";"
+      for variable in ${VARIABLES_TO_VALIDATE}
+      do
+        name=$(echo "$variable" | xargs | cut -d ' ' -f 1)
+        value=$(echo "$variable"| xargs | cut -d ' ' -s -f 2)
+        if [ "$value" == 0 ] || [ "$value" == 'UNDEFINED' ] || [ "$value" == '' ]; then
+          echo "error: '$name' is unset, value='$value'"
+          exit 1
+        else
+          echo "'$name' -> '$value'"
+        fi
+      done
+  retry:
+    max: 2
+    when:
+      - unknown_failure
+      - runner_system_failure
