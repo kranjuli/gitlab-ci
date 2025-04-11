@@ -5,7 +5,7 @@ validate_input_variables:
   tags:
     - non-prod-workload
   rules:
-    - if: $VALIDATE_INPUT_DISABLED =~ /true/i
+    - if: $VIV_DISABLED =~ /true/i
       when: never
     - if: '$CI_PIPELINE_SOURCE == "web"'
       when: always
